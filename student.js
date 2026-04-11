@@ -45,23 +45,35 @@
         return `${s}秒`;
     }
 
-    // ✨ 新增功能：启动心跳监控（每分钟上报一次总学习时长）
+    // ✨ 升级版心跳包：精准记录“每门课程”的学习总时长
     function startHeartbeat() {
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(async () => {
-            if (!studentCode) return;
+            // 如果没登录，或者还没选好课程，就不记录
+            if (!studentCode || curDeckIdx < 0 || !allDecks[curDeckIdx]) return;
+            
+            // 抓取学生当前正在看的知识包名字 (比如: 会计基础 - [第一章])
+            const currentCourse = allDecks[curDeckIdx].title; 
+
             try {
-                // 读取当前档案中的分钟数
-                const { data } = await client.from('student_stats').select('total_study_minutes').eq('secret_code', studentCode).maybeSingle();
+                // 读取当前学生、当前课程的历史分钟数
+                const { data } = await client.from('student_stats')
+                    .select('total_study_minutes')
+                    .eq('secret_code', studentCode)
+                    .eq('course_name', currentCourse)
+                    .maybeSingle();
+                
                 let currentMins = data ? data.total_study_minutes : 0;
-                // 更新分钟数和最后活跃时间
+                
+                // 将时长 +1 分钟，并精准存入该课程名下
                 await client.from('student_stats').upsert({
                     secret_code: studentCode,
+                    course_name: currentCourse,
                     total_study_minutes: currentMins + 1,
                     last_active: new Date().toISOString()
                 });
-            } catch (e) { console.warn("心跳包发送失败，可能网络中断"); }
-        }, 60000); // 60000毫秒 = 1分钟
+            } catch (e) { console.warn("心跳包发送失败"); }
+        }, 60000); // 每 60 秒上报一次
     }
 
     dom.enterBtn.onclick = async () => {
