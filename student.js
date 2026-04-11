@@ -46,33 +46,46 @@
     }
 
     // ==========================================
-    // 🛡️ 防挂机系统：追踪用户的真实活跃状态
+    // 🛡️ 终极防挂机系统：真实活跃追踪 + 强制焦点锁
     // ==========================================
-    let lastActiveTime = Date.now(); // 记录最后一次操作的时间
+    let lastActiveTime = Date.now(); 
+    let isPageFocused = true; // ✨ 新增：页面焦点状态记录
 
-    // 监听各种“人类真实操作”（鼠标移动、打字、点击、手机滑动页面等）
+    // 1. 监听人类真实操作（鼠标、键盘、触摸）
     ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(evt => {
         document.addEventListener(evt, () => {
-            lastActiveTime = Date.now(); // 只要有操作，就刷新活跃时间
+            lastActiveTime = Date.now(); 
         }, { passive: true });
     });
 
-    // ✨ 升级版心跳包：防切屏 + 防挂机
+    // 2. ✨ 新增：监听窗口焦点状态（切标签页、点微信、分屏点别处，统统能抓到！）
+    window.addEventListener('focus', () => { 
+        isPageFocused = true; 
+        lastActiveTime = Date.now(); // 切回来时重置发呆时间
+    });
+    window.addEventListener('blur', () => { 
+        isPageFocused = false; // 只要点到了网页外面，立刻标记为失去焦点
+    });
+    document.addEventListener('visibilitychange', () => {
+        isPageFocused = !document.hidden;
+    });
+
+    // 3. 升级版心跳包
     function startHeartbeat() {
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(async () => {
-            // 如果没登录，或者还没选好课程，不记录
+            // 没登录或没选课，不记录
             if (!studentCode || curDeckIdx < 0 || !allDecks[curDeckIdx]) return;
             
-            // 🚨 防作弊拦截 1：切屏拦截。如果网页不在最前台（document.hidden 为 true），直接跳过！
-            if (document.hidden) {
-                console.log("🤫 学生切屏了，停止计时");
+            // 🚨 终极拦截 1：只要页面失去焦点（没被选中），哪怕它在屏幕上亮着，也立刻停表！
+            if (!isPageFocused) {
+                console.log("🤫 页面失去焦点（去干别的了），停止计时");
                 return;
             }
 
-            // 🚨 防作弊拦截 2：发呆拦截。如果距离上次动鼠标/滑屏幕超过了 5 分钟 (300000毫秒)，跳过！
-            if (Date.now() - lastActiveTime > 300000) {
-                console.log("😴 学生似乎睡着了，停止计时");
+            // 🚨 终极拦截 2：哪怕停留在当前页面，但发呆超过 3 分钟 (180000毫秒)，也停表！
+            if (Date.now() - lastActiveTime > 180000) {
+                console.log("😴 超过3分钟没有任何操作，判定为挂机，停止计时");
                 return;
             }
 
@@ -94,7 +107,7 @@
                     last_active: new Date().toISOString()
                 });
             } catch (e) { console.warn("心跳包发送失败"); }
-        }, 60000); // 依然是每 60 秒触发一次检查
+        }, 60000); 
     }
 
     dom.enterBtn.onclick = async () => {
