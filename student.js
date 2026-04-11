@@ -45,18 +45,40 @@
         return `${s}秒`;
     }
 
-    // ✨ 升级版心跳包：精准记录“每门课程”的学习总时长
+    // ==========================================
+    // 🛡️ 防挂机系统：追踪用户的真实活跃状态
+    // ==========================================
+    let lastActiveTime = Date.now(); // 记录最后一次操作的时间
+
+    // 监听各种“人类真实操作”（鼠标移动、打字、点击、手机滑动页面等）
+    ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(evt => {
+        document.addEventListener(evt, () => {
+            lastActiveTime = Date.now(); // 只要有操作，就刷新活跃时间
+        }, { passive: true });
+    });
+
+    // ✨ 升级版心跳包：防切屏 + 防挂机
     function startHeartbeat() {
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(async () => {
-            // 如果没登录，或者还没选好课程，就不记录
+            // 如果没登录，或者还没选好课程，不记录
             if (!studentCode || curDeckIdx < 0 || !allDecks[curDeckIdx]) return;
             
-            // 抓取学生当前正在看的知识包名字 (比如: 会计基础 - [第一章])
+            // 🚨 防作弊拦截 1：切屏拦截。如果网页不在最前台（document.hidden 为 true），直接跳过！
+            if (document.hidden) {
+                console.log("🤫 学生切屏了，停止计时");
+                return;
+            }
+
+            // 🚨 防作弊拦截 2：发呆拦截。如果距离上次动鼠标/滑屏幕超过了 5 分钟 (300000毫秒)，跳过！
+            if (Date.now() - lastActiveTime > 300000) {
+                console.log("😴 学生似乎睡着了，停止计时");
+                return;
+            }
+
             const currentCourse = allDecks[curDeckIdx].title; 
 
             try {
-                // 读取当前学生、当前课程的历史分钟数
                 const { data } = await client.from('student_stats')
                     .select('total_study_minutes')
                     .eq('secret_code', studentCode)
@@ -65,7 +87,6 @@
                 
                 let currentMins = data ? data.total_study_minutes : 0;
                 
-                // 将时长 +1 分钟，并精准存入该课程名下
                 await client.from('student_stats').upsert({
                     secret_code: studentCode,
                     course_name: currentCourse,
@@ -73,7 +94,7 @@
                     last_active: new Date().toISOString()
                 });
             } catch (e) { console.warn("心跳包发送失败"); }
-        }, 60000); // 每 60 秒上报一次
+        }, 60000); // 依然是每 60 秒触发一次检查
     }
 
     dom.enterBtn.onclick = async () => {
