@@ -5,6 +5,23 @@
         KEY: 'sb_publishable_Su4CKVNIae5_rVeGAoHgtw_uE3zQj3V'
     };
 
+// 🧮 动态注入 MathJax 数学引擎
+    window.MathJax = {
+        tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+        startup: { typeset: false }
+    };
+    const mathScript = document.createElement('script');
+    mathScript.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+    mathScript.async = true;
+    document.head.appendChild(mathScript);
+
+    // 定义一个通用的渲染公式函数
+    function renderMath() {
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise().catch((err) => console.log('MathJax 渲染失败: ', err));
+        }
+    }
+        
     if (!window.supabase) return alert("网络连接失败，请开启全局代理！");
     const client = window.supabase.createClient(CONF.URL, CONF.KEY);
 
@@ -154,6 +171,8 @@
             </div>`;
         div.onclick = () => div.classList.toggle('flipped');
         dom.cardBox.appendChild(div);
+        
+        renderMath(); // ✨ 新增：卡片显示后立刻渲染公式！
     }
 
     dom.quizBtn.onclick = () => {
@@ -305,6 +324,8 @@
                 document.getElementById('self-wrong-btn').onclick = () => handleSelfGrade(false);
             };
         }
+        
+        renderMath(); // ✨ 新增：题目显示后立刻渲染公式！
     }
 
     dom.next.onclick = () => { if (curCardIdx < curCards.length - 1) { curCardIdx++; showCard(); } };
