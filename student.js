@@ -153,6 +153,12 @@
         dom.prog.textContent = `${curCardIdx + 1} / ${curCards.length}`;
         const c = curCards[curCardIdx];
         const cleanQuestion = c.q.replace(/^Question:\s*/i, '');
+        
+        // ✨ 新增：处理多选题的答案显示，将 &&& 替换为漂亮的换行
+        const isMulti = c.a.includes('&&&');
+        const displayAns = isMulti ? c.a.split('&&&').join('<br>✅ ') : c.a;
+        const finalAnsHtml = isMulti ? '✅ ' + displayAns : c.a;
+
         const div = document.createElement('div'); div.className = 'flashcard';
         div.innerHTML = `
             <div class="flashcard-inner">
@@ -164,7 +170,7 @@
                     </div>
                 </div>
                 <div class="flashcard-back">
-                    <div class="premium-ans-box"><div style="font-size: 12px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">🎯 CORRECT ANSWER</div><div style="font-size: 18px; font-weight: 600;">${c.a}</div></div>
+                    <div class="premium-ans-box"><div style="font-size: 12px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">🎯 CORRECT ANSWER</div><div style="font-size: 18px; font-weight: 600; line-height:1.5;">${finalAnsHtml}</div></div>
                     ${c.exp||'<div class="feynman-box" style="text-align:center;">暂无解析</div>'}
                     <div style="text-align: center; margin-top: 30px;"><span style="background: rgba(0,0,0,0.15); color: #475569; padding: 8px 20px; border-radius: 20px; font-size: 13px; font-weight: bold;">🔄 点击翻回正面</span></div>
                 </div>
@@ -172,7 +178,7 @@
         div.onclick = () => div.classList.toggle('flipped');
         dom.cardBox.appendChild(div);
         
-        renderMath(); // ✨ 新增：卡片显示后立刻渲染公式！
+        renderMath(); 
     }
 
     dom.quizBtn.onclick = () => {
@@ -251,10 +257,15 @@
         const cleanQuizQuestion = c.q.replace(/^Question:\s*/i, '');
         const wrongOpts = [c.w1, c.w2, c.w3].filter(Boolean);
         
+        // ✨ 新增：多选题判定逻辑
+        const isMulti = c.a && c.a.includes('&&&');
+        const correctAnswersArray = isMulti ? c.a.split('&&&') : [c.a];
+        
         let qType = 'MCQ'; let badgeHtml = '';
-        if (wrongOpts.length === 0) { qType = 'ESSAY'; badgeHtml = '<span class="type-badge type-essay">✍️ 解答题</span>'; }
+        if (isMulti) { qType = 'MULTI'; badgeHtml = '<span class="type-badge" style="background:#e0f2fe; color:#0369a1;">☑️ 多选题</span>'; }
+        else if (wrongOpts.length === 0) { qType = 'ESSAY'; badgeHtml = '<span class="type-badge type-essay">✍️ 解答题</span>'; }
         else if (wrongOpts.length === 1) { qType = 'TF'; badgeHtml = '<span class="type-badge type-tf">⚖️ 判断题</span>'; }
-        else { badgeHtml = '<span class="type-badge type-mcq">🔘 选择题</span>'; }
+        else { badgeHtml = '<span class="type-badge type-mcq">🔘 单选题</span>'; }
 
         dom.quizBox.innerHTML = `
             <div class="glass-panel" style="padding:30px; max-height:85vh; overflow-y:auto;">
@@ -269,24 +280,86 @@
             
         const listDiv = document.getElementById('opt-list');
 
-        if (qType === 'MCQ' || qType === 'TF') {
-            let opts = [c.a, ...wrongOpts];
+        // ✨ 升级后的多选/单选/判断 渲染逻辑
+        if (qType === 'MCQ' || qType === 'TF' || qType === 'MULTI') {
+            let opts = [...correctAnswersArray, ...wrongOpts];
             opts.sort(() => Math.random() - 0.5);
-            const letters = ['A', 'B', 'C', 'D', 'E'];
-            opts.forEach((o, i) => {
-                const btn = document.createElement('button'); btn.className = 'quiz-option';
-                btn.innerHTML = `<span style="font-weight:800;margin-right:10px;">${letters[i]}.</span> ${o}`;
-                btn.onclick = () => {
-                    listDiv.querySelectorAll('button').forEach(b => b.disabled = true);
-                    let correct = (o === c.a);
-                    if (correct) { btn.classList.add('correct-answer'); score++; } else { btn.classList.add('wrong-answer'); listDiv.querySelectorAll('button')[opts.indexOf(c.a)].classList.add('show-correct'); }
-                    userAnswers.push({ q: cleanQuizQuestion, userAns: o, correctAns: c.a, isCorrect: correct, exp: c.exp });
+            const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+            
+            if (qType === 'MULTI') {
+                // 🌀 多选题逻辑
+                let selectedSet = new Set();
+                opts.forEach((o, i) => {
+                    const btn = document.createElement('button'); btn.className = 'quiz-option';
+                    btn.innerHTML = `<span style="font-weight:800;margin-right:10px;">${letters[i]}.</span> ${o}`;
+                    btn.onclick = () => {
+                        if (btn.disabled) return;
+                        if (selectedSet.has(o)) {
+                            selectedSet.delete(o);
+                            btn.style.boxShadow = '';
+                            btn.style.background = '';
+                            btn.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                        } else {
+                            selectedSet.add(o);
+                            btn.style.boxShadow = 'inset 0 0 0 2px #3b82f6';
+                            btn.style.background = 'rgba(59, 130, 246, 0.1)';
+                            btn.style.borderColor = '#3b82f6';
+                        }
+                    };
+                    listDiv.appendChild(btn);
+                });
+                
+                // 增加一个确认提交按钮
+                const submitBtn = document.createElement('button');
+                submitBtn.className = 'glass-btn';
+                submitBtn.style.cssText = 'width:100%;margin-top:15px;background:#4f46e5;color:white;font-weight:bold;';
+                submitBtn.textContent = '✅ 确认提交选项';
+                submitBtn.onclick = () => {
+                    if (selectedSet.size === 0) return alert('请至少选择一个选项！');
+                    submitBtn.style.display = 'none';
+                    
+                    // 评分逻辑：全部选对才给分
+                    let isCorrect = (selectedSet.size === correctAnswersArray.length) && [...selectedSet].every(val => correctAnswersArray.includes(val));
+                    if (isCorrect) score++;
+                    
+                    // 视觉反馈
+                    const allBtns = listDiv.querySelectorAll('.quiz-option');
+                    allBtns.forEach((btn, index) => {
+                        btn.disabled = true; // 锁定按钮
+                        btn.style.boxShadow = ''; // 清除临时高亮
+                        let optText = opts[index];
+                        let isSelected = selectedSet.has(optText);
+                        let isActuallyCorrect = correctAnswersArray.includes(optText);
+                        
+                        if (isSelected && isActuallyCorrect) btn.classList.add('correct-answer');
+                        else if (isSelected && !isActuallyCorrect) btn.classList.add('wrong-answer');
+                        else if (!isSelected && isActuallyCorrect) btn.classList.add('show-correct'); // 漏选的正确答案提示
+                    });
+                    
+                    userAnswers.push({ q: cleanQuizQuestion, userAns: [...selectedSet].join(' | '), correctAns: correctAnswersArray.join(' | '), isCorrect: isCorrect, exp: c.exp });
                     document.getElementById('quiz-res').innerHTML = `<button id="next-q" class="glass-btn" style="width:100%;margin-top:25px;background:#3b82f6;color:white;font-weight:bold;">下一题 ➡️</button>`;
                     document.getElementById('next-q').onclick = () => { quizIdx++; showQuestion(list); };
                 };
-                listDiv.appendChild(btn);
-            });
+                document.getElementById('quiz-res').appendChild(submitBtn);
+
+            } else {
+                // 🔘 原本的单选题/判断题逻辑 (保持即点即提交)
+                opts.forEach((o, i) => {
+                    const btn = document.createElement('button'); btn.className = 'quiz-option';
+                    btn.innerHTML = `<span style="font-weight:800;margin-right:10px;">${letters[i]}.</span> ${o}`;
+                    btn.onclick = () => {
+                        listDiv.querySelectorAll('button').forEach(b => b.disabled = true);
+                        let correct = (o === c.a);
+                        if (correct) { btn.classList.add('correct-answer'); score++; } else { btn.classList.add('wrong-answer'); listDiv.querySelectorAll('button')[opts.indexOf(c.a)].classList.add('show-correct'); }
+                        userAnswers.push({ q: cleanQuizQuestion, userAns: o, correctAns: c.a, isCorrect: correct, exp: c.exp });
+                        document.getElementById('quiz-res').innerHTML = `<button id="next-q" class="glass-btn" style="width:100%;margin-top:25px;background:#3b82f6;color:white;font-weight:bold;">下一题 ➡️</button>`;
+                        document.getElementById('next-q').onclick = () => { quizIdx++; showQuestion(list); };
+                    };
+                    listDiv.appendChild(btn);
+                });
+            }
         } else {
+            
             listDiv.innerHTML = `
                 <textarea id="essay-ans" placeholder="✍️ 请在此输入你的解答思路..." style="width:100%; height:120px; padding:15px; border-radius:12px; border:2px solid rgba(255,255,255,0.6); font-size:15px; margin-bottom:10px; resize:vertical; outline:none; background:rgba(255,255,255,0.7); box-sizing:border-box;"></textarea>
                 <button id="show-ans-btn" class="glass-btn" style="width:100%; background:#4f46e5; color:white; font-weight:bold;">👀 答题完毕，对照答案</button>
